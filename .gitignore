@@ -12,6 +12,7 @@ pylds.egg-info/
 *.exe
 *.o
 *.so
+*.c
 
 # Packages #
 ############
