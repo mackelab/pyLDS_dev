@@ -1,2 +1,4 @@
-# pyRRHDLDS
-large-scale implementation of the expectation-maximisation algoithm in python for the reduced-rank high-dimensional linear dynamical system
+Development repository for the pyLDS code originally written by Matthew J. Johnson
+![Work in progress](https://i.imgur.com/5qZXx.gif)
+
+
