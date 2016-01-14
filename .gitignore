@@ -6,6 +6,7 @@ pylds.egg-info/
 
 # Compiled source #
 ###################
+*.pyc
 *.com
 *.class
 *.dll
