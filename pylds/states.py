@@ -4,8 +4,10 @@ import numpy as np
 from pybasicbayes.util.general import AR_striding
 from pybasicbayes.util.stats import mniw_expectedstats
 
-from lds_messages_interface import kalman_filter, filter_and_sample, E_step, \
-    info_E_step
+from lds_messages_interface import kalman_filter, filter_and_sample, \
+    kalman_filter_diagonal, filter_and_sample_diagonal, \
+    E_step, E_step_diagonal, info_E_step
+    
 
 
 class LDSStates(object):
@@ -30,15 +32,28 @@ class LDSStates(object):
                 else:
                     self.stateseq = np.random.normal(size=(self.T,self.n))
 
+
     ### basics
 
     def log_likelihood(self):
+        return self._ll_diag() if self.diag_sigma_obs else self._ll() 
+
+    def _ll(self):
+        if self._normalizer is None:
+            self._normalizer, _, _ = kalman_filter_diagonal(
+                self.mu_init, self.sigma_init,
+                self.A, self.sigma_states, self.C, self.dsigma_obs,
+                self.data)
+        return self._normalizer
+
+    def _ll_diag(self):
         if self._normalizer is None:
             self._normalizer, _, _ = kalman_filter(
                 self.mu_init, self.sigma_init,
                 self.A, self.sigma_states, self.C, self.sigma_obs,
                 self.data)
         return self._normalizer
+
 
     ### generation
 
@@ -85,31 +100,65 @@ class LDSStates(object):
     ### filtering
 
     def filter(self):
+        self._filter_diag() if self.diag_sigma_obs else self._filter()
+
+    def _filter(self):
         self._normalizer, self.filtered_mus, self.filtered_sigmas = \
             kalman_filter(
                 self.mu_init, self.sigma_init,
                 self.A, self.sigma_states, self.C, self.sigma_obs,
                 self.data)
 
+    def _filter_diag(self):
+        self._normalizer, self.filtered_mus, self.filtered_sigmas = \
+            kalman_filter_diagonal(
+                self.mu_init, self.sigma_init,
+                self.A, self.sigma_states, self.C, self.dsigma_obs,
+                self.data)
+
     ### resampling
 
     def resample(self):
+        self._resamp_diagle() if self.diag_sigma_obs else self._resample()
+
+    def _resample(self):        
         self._normalizer, self.stateseq = filter_and_sample(
             self.mu_init, self.sigma_init,
             self.A, self.sigma_states, self.C, self.sigma_obs,
             self.data)
 
+    def _resample_diag(self):        
+        self._normalizer, self.stateseq = filter_and_sample_diagonal(
+            self.mu_init, self.sigma_init,
+            self.A, self.sigma_states, self.C, self.dsigma_obs,
+            self.data)
+
+
     ### EM
 
     def E_step(self):
+        E_xtp1_xtT = self._E_step_diag() if self.diag_sigma_obs \
+            else self._E_step()
+
+        self._set_expected_stats(
+            self.smoothed_mus,self.smoothed_sigmas,E_xtp1_xtT)
+
+    def _E_step(self):
         self._normalizer, self.smoothed_mus, self.smoothed_sigmas, \
             E_xtp1_xtT = E_step(
                 self.mu_init, self.sigma_init,
                 self.A, self.sigma_states, self.C, self.sigma_obs,
                 self.data)
+        return E_xtp1_xtT
 
-        self._set_expected_stats(
-            self.smoothed_mus,self.smoothed_sigmas,E_xtp1_xtT)
+    def _E_step_diag(self):
+        self._normalizer, self.smoothed_mus, self.smoothed_sigmas, \
+            E_xtp1_xtT = E_step_diagonal(
+                self.mu_init, self.sigma_init,
+                self.A, self.sigma_states, self.C, self.dsigma_obs,
+                self.data)
+        return E_xtp1_xtT
+
 
     def _set_expected_stats(self,smoothed_mus,smoothed_sigmas,E_xtp1_xtT):
         assert not np.isnan(E_xtp1_xtT).any()
@@ -279,6 +328,14 @@ class LDSStates(object):
     @property
     def sigma_obs(self):
         return self.model.sigma_obs
+
+    @property
+    def diag_sigma_obs(self):
+        return self.model.diag_sigma_obs
+
+    @property
+    def dsigma_obs(self):
+        return self.model.dsigma_obs
 
     @property
     def strided_stateseq(self):

@@ -227,6 +227,66 @@ def E_step(
 
 ### diagonal emission distributions (D is diagonal)
 
+def E_step_diagonal(
+    double[:] mu_init, double[:,:] sigma_init,
+    double[:,:,:] A, double[:,:,:] sigma_states,
+    double[:,:,:] C, double[:,:] sigma_obs,
+    double[:,::1] data):
+
+    # NOTE: this is almost the same as the RTS smoother except
+    #   1. we collect statistics along the way, and
+    #   2. we use the RTS gain matrix to do it
+
+    # allocate temporaries and internals
+    cdef int T = C.shape[0], p = C.shape[1], n = C.shape[2]
+    cdef int t
+
+    cdef double[:,:] mu_predicts = np.empty((T+1,n))
+    cdef double[:,:,:] sigma_predicts = np.empty((T+1,n,n))
+
+    cdef double[::1,:] temp_pn  = np.empty((p,n),  order='F')
+    cdef double[::1,:] temp_pn2 = np.empty((p,n),  order='F')
+    cdef double[::1,:] temp_pn3 = np.empty((p,n),  order='F')
+    cdef double[::1]   temp_p   = np.empty((p,),   order='F')
+    cdef double[::1,:] temp_nn  = np.empty((n,n),  order='F')
+    cdef double[::1,:] temp_nn2 = np.empty((n,n),  order='F')
+    cdef double[::1,:] temp_pk  = np.empty((p,n+1),order='F')
+    cdef double[::1,:] temp_nk  = np.empty((n,n+1),order='F')
+
+    # allocate output
+    cdef double[:,::1] smoothed_mus = np.empty((T,n))
+    cdef double[:,:,::1] smoothed_sigmas = np.empty((T,n,n))
+    cdef double[:,:,::1] ExnxT = np.empty((T-1,n,n))  # 'n' for next
+    cdef double ll = 0.
+
+    # run filter forwards, saving predictions
+    mu_predicts[0] = mu_init
+    sigma_predicts[0] = sigma_init
+    for t in range(T):
+        ll += condition_on_diagonal(
+            mu_predicts[t], sigma_predicts[t], C[t], sigma_obs[t], data[t],
+            smoothed_mus[t], smoothed_sigmas[t],
+            temp_p, temp_nn, temp_pn, temp_pn2, temp_pn3, temp_pk, temp_nk)
+        predict(
+            smoothed_mus[t], smoothed_sigmas[t], A[t], sigma_states[t],
+            mu_predicts[t+1], sigma_predicts[t+1],
+            temp_nn)
+
+    # run rts update backwards, using predictions and setting E[x_t x_{t+1}^T]
+    for t in range(T-2,-1,-1):
+        rts_backward_step(
+            A[t], sigma_states[t],
+            smoothed_mus[t], smoothed_sigmas[t],
+            mu_predicts[t+1], sigma_predicts[t+1],
+            smoothed_mus[t+1], smoothed_sigmas[t+1],
+            temp_nn, temp_nn2)
+        set_dynamics_stats(
+            smoothed_mus[t], smoothed_mus[t+1], smoothed_sigmas[t+1],
+            temp_nn, ExnxT[t])
+
+    return ll, np.asarray(smoothed_mus), np.asarray(smoothed_sigmas), np.asarray(ExnxT)
+
+
 def kalman_filter_diagonal(
     double[:] mu_init, double[:,:] sigma_init,
     double[:,:,:] A, double[:,:,:] sigma_states,

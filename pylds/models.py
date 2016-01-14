@@ -135,6 +135,34 @@ class _LDSBase(Model):
         self.emission_distn.sigma = sigma_obs
 
     @property
+    def diag_sigma_obs(self):
+        try:
+            return self.emission_distn.diag_sigma
+        except:
+            return False
+
+    @diag_sigma_obs.setter
+    def diag_sigma_obs(self,diag_sigma_obs):
+        try:
+            self.emission_distn.diag_sigma = diag_sigma_obs
+        except TypeError:
+            "emission distribution does not support diagonal sigma_obs"
+
+    @property
+    def dsigma_obs(self):
+        try:
+            return self.emission_distn.dsigma
+        except TypeError:
+            "emission distribution does not support diagonal sigma_obs"
+
+    @dsigma_obs.setter
+    def dsigma_obs(self,dsigma_obs):
+        try:
+            self.emission_distn.dsigma = dsigma_obs
+        except TypeError:
+            "emission distribution does not support diagonal sigma_obs"
+
+    @property
     def is_stable(self):
         return np.max(np.abs(np.linalg.eivals(self.dynamics_distn.A))) < 1.
 

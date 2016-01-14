@@ -14,7 +14,8 @@ from lds_messages import \
     kalman_filter_diagonal as _kalman_filter_diagonal, \
     filter_and_sample_diagonal as _filter_and_sample_diagonal, \
     filter_and_sample_randomwalk as _filter_and_sample_randomwalk, \
-    E_step as _E_step
+    E_step as _E_step, \
+    E_step_diagonal as _E_step_diagonal
 
 
 def _ensure_ndim(X,T,ndim):
@@ -62,11 +63,12 @@ def _wrap(func, check):
     return wrapped
 
 
+E_step = _wrap(_E_step,_argcheck)
+E_step_diagonal = _wrap(_E_step_diagonal, _argcheck_diag_sigma_obs)
 kalman_filter = _wrap(_kalman_filter,_argcheck)
+kalman_filter_diagonal = _wrap(_kalman_filter_diagonal,_argcheck_diag_sigma_obs)
 rts_smoother = _wrap(_rts_smoother,_argcheck)
 filter_and_sample = _wrap(_filter_and_sample,_argcheck)
-E_step = _wrap(_E_step,_argcheck)
-kalman_filter_diagonal = _wrap(_kalman_filter_diagonal,_argcheck_diag_sigma_obs)
 filter_and_sample_diagonal = _wrap(_filter_and_sample_diagonal,_argcheck_diag_sigma_obs)
 filter_and_sample_randomwalk = _wrap(_filter_and_sample_randomwalk,_argcheck_randomwalk)
 
