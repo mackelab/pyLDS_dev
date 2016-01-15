@@ -6,6 +6,10 @@ from pybasicbayes.distributions import Regression
 
 from pybasicbayes.util.general import any_none
 
+# TODO: fix the resample() functionality to draw A, Sigma from priors
+#       also for diagonal sigma (currently would sample full matrices
+#       even if flag diag_sigma = True).
+
 class Regression_diag(Regression):
     def __init__(
             self, nu_0=None,S_0=None,M_0=None,K_0=None,
