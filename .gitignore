@@ -3,6 +3,7 @@
 build/
 dist/
 pylds.egg-info/
+**/dev/.ipynb_checkpoints/
 
 # Compiled source #
 ###################
