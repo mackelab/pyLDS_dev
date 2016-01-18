@@ -67,3 +67,30 @@ class Regression_diag(Regression):
         else:
             return True
 
+    def max_likelihood(self,data,weights=None,stats=None):
+        if stats is None:
+            stats = self._get_statistics(data) if weights is None \
+                else self._get_weighted_statistics(data,weights)
+
+        yyT, yxT, xxT, n = stats
+
+        if n > 0:
+            try:
+                self.A = np.linalg.solve(xxT, yxT.T).T
+                self.sigma = (yyT - self.A.dot(yxT.T))/n
+
+                def symmetrize(A):
+                    return (A + A.T)/2.
+                self.sigma = 1e-10*np.eye(self.D_out) \
+                    + symmetrize(self.sigma)  # numerical
+            except np.linalg.LinAlgError:
+                self.broken = True
+        else:
+            self.broken = True
+
+        assert np.allclose(self.sigma,self.sigma.T)
+        assert np.all(np.linalg.eigvalsh(self.sigma) > 0.)
+
+        self._initialize_mean_field()
+
+        return self

@@ -36,7 +36,7 @@ from util cimport copy_transpose, copy_upper_lower
 def kalman_filter(
     double[:] mu_init, double[:,:] sigma_init,
     double[:,:,:] A, double[:,:,:] sigma_states,
-    double[:,:,:] C, double[:,:,:] sigma_obs,
+    double[:,:,:] C, double[:,:] d, double[:,:,:] sigma_obs,
     double[:,::1] data):
 
     # allocate temporaries and internals
@@ -58,8 +58,8 @@ def kalman_filter(
 
     # run filter forwards
     for t in range(T):
-        ll += condition_on(
-            mu_predict, sigma_predict, C[t], sigma_obs[t], data[t],
+        ll += condition_on_affine(
+            mu_predict, sigma_predict, C[t], d[t], sigma_obs[t], data[t],
             filtered_mus[t], filtered_sigmas[t],
             temp_p, temp_pn, temp_pp)
         predict(
@@ -73,7 +73,7 @@ def kalman_filter(
 def rts_smoother(
     double[::1] mu_init, double[:,::1] sigma_init,
     double[:,:,:] A, double[:,:,:] sigma_states,
-    double[:,:,:] C, double[:,:,:] sigma_obs,
+    double[:,:,:] C, double[:,:] d, double[:,:,:] sigma_obs,
     double[:,::1] data):
 
     # allocate temporaries and internals
@@ -98,8 +98,8 @@ def rts_smoother(
     mu_predicts[0] = mu_init
     sigma_predicts[0] = sigma_init
     for t in range(T):
-        ll += condition_on(
-            mu_predicts[t], sigma_predicts[t], C[t], sigma_obs[t], data[t],
+        ll += condition_on_affine(
+            mu_predicts[t], sigma_predicts[t], C[t], d[t], sigma_obs[t], data[t],
             smoothed_mus[t], smoothed_sigmas[t],
             temp_p, temp_pn, temp_pp)
         predict(
@@ -122,7 +122,7 @@ def rts_smoother(
 def filter_and_sample(
     double[:] mu_init, double[:,:] sigma_init,
     double[:,:,:] A, double[:,:,:] sigma_states,
-    double[:,:,:] C, double[:,:,:] sigma_obs,
+    double[:,:,:] C, double[:,:] d, double[:,:,:] sigma_obs,
     double[:,::1] data):
 
     # allocate temporaries and internals
@@ -147,8 +147,8 @@ def filter_and_sample(
 
     # run filter forwards
     for t in range(T):
-        ll += condition_on(
-            mu_predict, sigma_predict, C[t], sigma_obs[t], data[t],
+        ll += condition_on_affine(
+            mu_predict, sigma_predict, C[t], d[t], sigma_obs[t], data[t],
             filtered_mus[t], filtered_sigmas[t],
             temp_p, temp_pn, temp_pp)
         predict(
@@ -171,7 +171,7 @@ def filter_and_sample(
 def E_step(
     double[:] mu_init, double[:,:] sigma_init,
     double[:,:,:] A, double[:,:,:] sigma_states,
-    double[:,:,:] C, double[:,:,:] sigma_obs,
+    double[:,:,:] C, double[:,:] d, double[:,:,:] sigma_obs,
     double[:,::1] data):
 
     # NOTE: this is almost the same as the RTS smoother except
@@ -201,8 +201,8 @@ def E_step(
     mu_predicts[0] = mu_init
     sigma_predicts[0] = sigma_init
     for t in range(T):
-        ll += condition_on(
-            mu_predicts[t], sigma_predicts[t], C[t], sigma_obs[t], data[t],
+        ll += condition_on_affine(
+            mu_predicts[t], sigma_predicts[t], C[t], d[t], sigma_obs[t], data[t],
             smoothed_mus[t], smoothed_sigmas[t],
             temp_p, temp_pn, temp_pp)
         predict(
@@ -230,7 +230,7 @@ def E_step(
 def E_step_diagonal(
     double[:] mu_init, double[:,:] sigma_init,
     double[:,:,:] A, double[:,:,:] sigma_states,
-    double[:,:,:] C, double[:,:] sigma_obs,
+    double[:,:,:] C, double[:,:] d, double[:,:] sigma_obs,
     double[:,::1] data):
 
     # NOTE: this is almost the same as the RTS smoother except
@@ -263,8 +263,8 @@ def E_step_diagonal(
     mu_predicts[0] = mu_init
     sigma_predicts[0] = sigma_init
     for t in range(T):
-        ll += condition_on_diagonal(
-            mu_predicts[t], sigma_predicts[t], C[t], sigma_obs[t], data[t],
+        ll += condition_on_affine_diagonal(
+            mu_predicts[t], sigma_predicts[t], C[t], d[t], sigma_obs[t], data[t],
             smoothed_mus[t], smoothed_sigmas[t],
             temp_p, temp_nn, temp_pn, temp_pn2, temp_pn3, temp_pk, temp_nk)
         predict(
@@ -290,7 +290,7 @@ def E_step_diagonal(
 def kalman_filter_diagonal(
     double[:] mu_init, double[:,:] sigma_init,
     double[:,:,:] A, double[:,:,:] sigma_states,
-    double[:,:,:] C, double[:,:] sigma_obs,
+    double[:,:,:] C, double[:,:] d, double[:,:] sigma_obs,
     double[:,::1] data):
 
     # allocate temporaries and internals
@@ -315,8 +315,8 @@ def kalman_filter_diagonal(
 
     # run filter forwards
     for t in range(T):
-        ll += condition_on_diagonal(
-            mu_predict, sigma_predict, C[t], sigma_obs[t], data[t],
+        ll += condition_on_affine_diagonal(
+            mu_predict, sigma_predict, C[t], d[t], sigma_obs[t], data[t],
             filtered_mus[t], filtered_sigmas[t],
             temp_p, temp_nn, temp_pn, temp_pn2, temp_pn3, temp_pk, temp_nk)
         predict(
@@ -330,7 +330,7 @@ def kalman_filter_diagonal(
 def filter_and_sample_diagonal(
     double[:] mu_init, double[:,:] sigma_init,
     double[:,:,:] A, double[:,:,:] sigma_states,
-    double[:,:,:] C, double[:,:] sigma_obs,
+    double[:,:,:] C, double[:,:] d, double[:,:] sigma_obs,
     double[:,::1] data):
 
     # allocate temporaries and internals
@@ -358,8 +358,8 @@ def filter_and_sample_diagonal(
 
     # run filter forwards
     for t in range(T):
-        ll += condition_on_diagonal(
-            mu_predict, sigma_predict, C[t], sigma_obs[t], data[t],
+        ll += condition_on_affine_diagonal(
+            mu_predict, sigma_predict, C[t], d[t], sigma_obs[t], data[t],
             filtered_mus[t], filtered_sigmas[t],
             temp_p, temp_nn, temp_pn, temp_pn2, temp_pn3, temp_pk, temp_nk)
         predict(
@@ -470,6 +470,53 @@ cdef inline double condition_on(
 
         return ll
 
+cdef inline double condition_on_affine(
+    # inputs
+    double[:] mu_x, double[:,:] sigma_x,
+    double[:,:] C, double[:] d, double[:,:] sigma_obs, double[:] y,
+    # outputs
+    double[:] mu_cond, double[:,:] sigma_cond,
+    # temps
+    double[:] temp_p, double[:,:] temp_pn, double[:,:] temp_pp,
+    ) nogil:
+    cdef int p = C.shape[0], n = C.shape[1]
+    cdef int nn = n*n, pp = p*p
+    cdef int inc = 1, info = 0
+    cdef double one = 1., zero = 0., neg1 = -1., ll = 0.
+
+    if y[0] != y[0]:  # nan check
+        dcopy(&n, &mu_x[0], &inc, &mu_cond[0], &inc)
+        dcopy(&nn, &sigma_x[0,0], &inc, &sigma_cond[0,0], &inc)
+        return 0.
+    else:
+        # NOTE: the C arguments are treated as transposed because C is
+        # assumed to be in C order (row-major order)
+        dgemm('T', 'N', &p, &n, &n, &one, &C[0,0], &n, &sigma_x[0,0], &n, &zero, &temp_pn[0,0], &p)
+        dcopy(&pp, &sigma_obs[0,0], &inc, &temp_pp[0,0], &inc)
+        dgemm('N', 'N', &p, &p, &n, &one, &temp_pn[0,0], &p, &C[0,0], &n, &one, &temp_pp[0,0], &p)
+        dpotrf('L', &p, &temp_pp[0,0], &p, &info)
+
+        dcopy(&p, &y[0], &inc, &temp_p[0], &inc)
+        daxpy(&p, &neg1, &d[0], &inc, &temp_p[0], &inc)
+        dgemv('T', &n, &p, &neg1, &C[0,0], &n, &mu_x[0], &inc, &one, &temp_p[0], &inc)
+        dtrtrs('L', 'N', 'N', &p, &inc, &temp_pp[0,0], &p, &temp_p[0], &p, &info)
+        ll = (-1./2) * dnrm2(&p, &temp_p[0], &inc)**2
+        dtrtrs('L', 'T', 'N', &p, &inc, &temp_pp[0,0], &p, &temp_p[0], &p, &info)
+        if (&mu_x[0] != &mu_cond[0]):
+            dcopy(&n, &mu_x[0], &inc, &mu_cond[0], &inc)
+        dgemv('T', &p, &n, &one, &temp_pn[0,0], &p, &temp_p[0], &inc, &one, &mu_cond[0], &inc)
+
+        dtrtrs('L', 'N', 'N', &p, &n, &temp_pp[0,0], &p, &temp_pn[0,0], &p, &info)
+        if (&sigma_x[0,0] != &sigma_cond[0,0]):
+            dcopy(&nn, &sigma_x[0,0], &inc, &sigma_cond[0,0], &inc)
+        # TODO this call aliases pointers, should really call dsyrk and copy lower to upper
+        dgemm('T', 'N', &n, &n, &p, &neg1, &temp_pn[0,0], &p, &temp_pn[0,0], &p, &one, &sigma_cond[0,0], &n)
+
+        ll -= p/2. * log(2.*PI)
+        for i in range(p):
+            ll -= log(temp_pp[i,i])
+
+        return ll
 
 cdef inline void predict(
     # inputs
@@ -607,6 +654,58 @@ cdef inline double condition_on_diagonal(
         ll -= p/2. * log(2*PI)
         return ll
 
+cdef inline double condition_on_affine_diagonal(
+    double[:] mu_x, double[:,:] sigma_x,
+    double[:,:] C, double[:] d, double[:] sigma_obs, double[:] y,
+    double[:] mu_cond, double[:,:] sigma_cond,
+    double[::1] temp_p, double[::1,:] temp_nn,
+    double[::1,:] temp_pn, double[::1,:] temp_pn2, double[::1,:] temp_pn3,
+    double[::1,:] temp_pk, double[::1,:] temp_nk,
+    ) nogil:
+
+    # see Boyd and Vandenberghe, Convex Optimization, Appendix C.4.3 (p. 679)
+    # and also https://en.wikipedia.org/wiki/Woodbury_matrix_identity
+    # and https://en.wikipedia.org/wiki/Matrix_determinant_lemma
+
+    # an extra temp (temp_pn3) and an extra copy_transpose are needed because C
+    # is not stored in Fortran order as solve_diagonal_plus_lowrank requires
+
+    cdef int p = C.shape[0], n = C.shape[1]
+    cdef int nn = n*n, pn = p*n
+    cdef int inc = 1, info = 0, i
+    cdef double one = 1., zero = 0., neg1 = -1., ll = 0.
+
+    if y[0] != y[0]:  # nan check
+        dcopy(&n, &mu_x[0], &inc, &mu_cond[0], &inc)
+        dcopy(&nn, &sigma_x[0,0], &inc, &sigma_cond[0,0], &inc)
+        return 0.
+    else:
+        # NOTE: the C arguments are treated as transposed because C is
+        # assumed to be in C order
+
+        dcopy(&p, &y[0], &inc, &temp_p[0], &inc)
+        daxpy(&p, &neg1, &d[0], &inc, &temp_p[0], &inc)
+        dgemv('T', &n, &p, &neg1, &C[0,0], &n, &mu_x[0], &inc, &one, &temp_p[0], &inc)
+        dgemm('T', 'N', &p, &n, &n, &one, &C[0,0], &n, &sigma_x[0,0], &n, &zero, &temp_pn[0,0], &p)
+        copy_transpose(n, p, &C[0,0], &temp_pn3[0,0])
+        dcopy(&p, &temp_p[0], &inc, &temp_pk[0,0], &inc)
+        dcopy(&pn, &temp_pn[0,0], &inc, &temp_pk[0,1], &inc)
+
+        ll = -1./2 * solve_diagonal_plus_lowrank(
+            sigma_obs, temp_pn3, sigma_x, temp_pk, False,
+            temp_nn, temp_pn2, temp_nk)
+
+        if (&mu_x[0] != &mu_cond[0]):
+            dcopy(&n, &mu_x[0], &inc, &mu_cond[0], &inc)
+        dgemv('T', &p, &n, &one, &temp_pn[0,0], &p, &temp_pk[0,0], &inc, &one, &mu_cond[0], &inc)
+
+        if (&sigma_x[0,0] != &sigma_cond[0,0]):
+            dcopy(&nn, &sigma_x[0,0], &inc, &sigma_cond[0,0], &inc)
+        dgemm('T', 'N', &n, &n, &p, &neg1, &temp_pn[0,0], &p, &temp_pk[0,1], &p, &one, &sigma_cond[0,0], &n)
+
+        ll -= 1./2 * ddot(&p, &temp_p[0], &inc, &temp_pk[0,0], &inc)
+        ll -= p/2. * log(2*PI)
+        return ll
 
 cdef inline double solve_diagonal_plus_lowrank(
     double[:] a, double[:,:] B, double[:,:] C, double[:,:] b, bint C_is_identity,

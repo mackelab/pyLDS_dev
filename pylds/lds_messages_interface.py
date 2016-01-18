@@ -28,23 +28,24 @@ def _ensure_ndim(X,T,ndim):
         return as_strided(X, shape=(T,)+X.shape, strides=(0,)+X.strides)
 
 
-def _argcheck(mu_init, sigma_init, A, sigma_states, C, sigma_obs, data):
+def _argcheck(mu_init, sigma_init, A, sigma_states, C, d, sigma_obs, data):
     T = data.shape[0]
     A, sigma_states, C, sigma_obs = \
         map(partial(_ensure_ndim, T=T, ndim=3),
             [A, sigma_states, C, sigma_obs])
+    d = _ensure_ndim(d, T=T, ndim=2)
     data = np.require(data, dtype=np.float64, requirements='C')
-    return mu_init, sigma_init, A, sigma_states, C, sigma_obs, data
+    return mu_init, sigma_init, A, sigma_states, C, d, sigma_obs, data
 
 
-def _argcheck_diag_sigma_obs(mu_init, sigma_init, A, sigma_states, C, sigma_obs, data):
+def _argcheck_diag_sigma_obs(mu_init, sigma_init, A, sigma_states, C, d, sigma_obs, data):
     T = data.shape[0]
     A, sigma_states, C = \
         map(partial(_ensure_ndim, T=T, ndim=3),
             [A, sigma_states, C])
-    sigma_obs = _ensure_ndim(sigma_obs, T=T, ndim=2)
+    d, sigma_obs = map(partial(_ensure_ndim, T=T, ndim=2), [d, sigma_obs])
     data = np.require(data, dtype=np.float64, requirements='C')
-    return mu_init, sigma_init, A, sigma_states, C, sigma_obs, data
+    return mu_init, sigma_init, A, sigma_states, C, d, sigma_obs, data
 
 
 def _argcheck_randomwalk(mu_init, sigma_init, sigmasq_states, sigmasq_obs, data):

@@ -69,7 +69,8 @@ class _LDSBase(Model):
     @property
     def n(self):
         'latent dimension'
-        return self.emission_distn.D_in
+        return self.emission_distn.D_in-1 if self.emission_distn.affine \
+            else self.emission_distn.D_in
 
     @property
     def p(self):
@@ -120,12 +121,27 @@ class _LDSBase(Model):
 
     @property
     def C(self):
-        return self.emission_distn.A
+        return self.emission_distn.A[:,:-1] if self.emission_distn.affine \
+            else self.emission_distn.A
 
     @C.setter
     def C(self,C):
-        self.emission_distn.A = C
+        if self.emission_distn.affine:
+            self.emission_distn.A[:,:-1] = C
+        else:
+            self.emission_distn.A = C
 
+    @property
+    def d(self):
+        return self.emission_distn.A[:,-1] if self.emission_distn.affine else np.zeros(self.p)
+
+    @d.setter
+    def d(self,d):
+        if self.emission_distn.affine: 
+            self.emission_distn.A[:,-1] = d
+        else:
+            raise TypeErorr('emission_distn not affine. d is not defined') 
+            
     @property
     def sigma_obs(self):
         return self.emission_distn.sigma
@@ -133,6 +149,8 @@ class _LDSBase(Model):
     @sigma_obs.setter
     def sigma_obs(self,sigma_obs):
         self.emission_distn.sigma = sigma_obs
+        if self.emission_distn.diag_sigma_obs:
+            self.emission_distn.dsigma = np.diag(sigma_obs)
 
     @property
     def diag_sigma_obs(self):
@@ -145,6 +163,8 @@ class _LDSBase(Model):
     def diag_sigma_obs(self,diag_sigma_obs):
         try:
             self.emission_distn.diag_sigma = diag_sigma_obs
+            if diag_sigma_obs and not hasattr(self.emission_distn,'dsigma'):
+                self.emission_distn.dsigma = np.diag(self.emission_distn.sigma)           
         except TypeError:
             "emission distribution does not support diagonal sigma_obs"
 
@@ -159,6 +179,7 @@ class _LDSBase(Model):
     def dsigma_obs(self,dsigma_obs):
         try:
             self.emission_distn.dsigma = dsigma_obs
+            self.emission_distn.sigma = np.diag(d_sigma_obs)
         except TypeError:
             "emission distribution does not support diagonal sigma_obs"
 

@@ -1,7 +1,7 @@
 from __future__ import division
 import numpy as np
 
-from pybasicbayes.util.general import AR_striding
+from pybasicbayes.util.general import AR_striding, blockarray
 from pybasicbayes.util.stats import mniw_expectedstats
 
 from lds_messages_interface import kalman_filter, filter_and_sample, \
@@ -42,7 +42,8 @@ class LDSStates(object):
         if self._normalizer is None:
             self._normalizer, _, _ = kalman_filter_diagonal(
                 self.mu_init, self.sigma_init,
-                self.A, self.sigma_states, self.C, self.dsigma_obs,
+                self.A, self.sigma_states, 
+                self.C, self.d, self.sigma_obs,
                 self.data)
         return self._normalizer
 
@@ -50,7 +51,8 @@ class LDSStates(object):
         if self._normalizer is None:
             self._normalizer, _, _ = kalman_filter(
                 self.mu_init, self.sigma_init,
-                self.A, self.sigma_states, self.C, self.sigma_obs,
+                self.A, self.sigma_states, 
+                self.C, self.d, self.sigma_obs,
                 self.data)
         return self._normalizer
 
@@ -73,8 +75,9 @@ class LDSStates(object):
 
     def sample_predictions(self, Tpred, states_noise, obs_noise):
         _, filtered_mus, filtered_sigmas = kalman_filter(
-            self.mu_init, self.sigma_init, self.A, self.sigma_states, self.C,
-            self.sigma_obs, self.data)
+            self.mu_init, self.sigma_init,
+            self.A, self.sigma_states, 
+            self.C, self.d, self.sigma_obs, self.data)
 
         init_mu = self.A.dot(filtered_mus[-1])
         init_sigma = self.sigma_states + self.A.dot(
@@ -105,32 +108,36 @@ class LDSStates(object):
     def _filter(self):
         self._normalizer, self.filtered_mus, self.filtered_sigmas = \
             kalman_filter(
-                self.mu_init, self.sigma_init,
-                self.A, self.sigma_states, self.C, self.sigma_obs,
+                self.mu_init, self.sigma_init, 
+                self.A, self.sigma_states, 
+                self.C, self.d, self.sigma_obs,
                 self.data)
 
     def _filter_diag(self):
         self._normalizer, self.filtered_mus, self.filtered_sigmas = \
             kalman_filter_diagonal(
                 self.mu_init, self.sigma_init,
-                self.A, self.sigma_states, self.C, self.dsigma_obs,
+                self.A, self.sigma_states, 
+                self.C, self.d, self.sigma_obs,
                 self.data)
 
     ### resampling
 
     def resample(self):
-        self._resamp_diagle() if self.diag_sigma_obs else self._resample()
+        self._resample_diag() if self.diag_sigma_obs else self._resample()
 
     def _resample(self):        
         self._normalizer, self.stateseq = filter_and_sample(
             self.mu_init, self.sigma_init,
-            self.A, self.sigma_states, self.C, self.sigma_obs,
+            self.A, self.sigma_states, 
+            self.C, self.d, self.sigma_obs,
             self.data)
 
     def _resample_diag(self):        
         self._normalizer, self.stateseq = filter_and_sample_diagonal(
             self.mu_init, self.sigma_init,
-            self.A, self.sigma_states, self.C, self.dsigma_obs,
+            self.A, self.sigma_states, 
+            self.C, self.d, self.sigma_obs,
             self.data)
 
 
@@ -147,7 +154,8 @@ class LDSStates(object):
         self._normalizer, self.smoothed_mus, self.smoothed_sigmas, \
             E_xtp1_xtT = E_step(
                 self.mu_init, self.sigma_init,
-                self.A, self.sigma_states, self.C, self.sigma_obs,
+                self.A, self.sigma_states,
+                self.C, self.d, self.sigma_obs,
                 self.data)
         return E_xtp1_xtT
 
@@ -155,7 +163,8 @@ class LDSStates(object):
         self._normalizer, self.smoothed_mus, self.smoothed_sigmas, \
             E_xtp1_xtT = E_step_diagonal(
                 self.mu_init, self.sigma_init,
-                self.A, self.sigma_states, self.C, self.dsigma_obs,
+                self.A, self.sigma_states, 
+                self.C, self.d, self.dsigma_obs,
                 self.data)
         return E_xtp1_xtT
 
@@ -180,11 +189,16 @@ class LDSStates(object):
         E_xtp1_xtT = E_xtp1_xtT.sum(0)
 
         def is_symmetric(A):
-            return np.allclose(A,A.T)
+            return np.allclose(A,A.T)                                    
 
         assert is_symmetric(ExxT)
         assert is_symmetric(E_xt_xtT)
         assert is_symmetric(E_xtp1_xtp1T)
+
+        if self.model.emission_distn.affine:
+            Ex, Ey = smoothed_mus.sum(0), data.sum(0)
+            ExxT = blockarray([[ExxT,np.atleast_2d(Ex).T],[np.atleast_2d(Ex),np.atleast_2d(self.T)]])
+            EyxT = np.hstack((EyxT,np.atleast_2d(Ey).T))        
 
         self.E_emission_stats = np.array([EyyT, EyxT, ExxT, self.T])
         self.E_dynamics_stats = np.array([E_xtp1_xtp1T, E_xtp1_xtT, E_xt_xtT, self.T-1])
@@ -324,6 +338,10 @@ class LDSStates(object):
     @property
     def C(self):
         return self.model.C
+
+    @property
+    def d(self):
+        return self.model.d
 
     @property
     def sigma_obs(self):
