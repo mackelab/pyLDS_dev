@@ -197,7 +197,8 @@ class LDSStates(object):
 
         if self.model.emission_distn.affine:
             Ex, Ey = smoothed_mus.sum(0), data.sum(0)
-            ExxT = blockarray([[ExxT,np.atleast_2d(Ex).T],[np.atleast_2d(Ex),np.atleast_2d(self.T)]])
+            ExxT = blockarray([[ExxT,np.atleast_2d(Ex).T],
+                               [np.atleast_2d(Ex),np.atleast_2d(self.T)]])
             EyxT = np.hstack((EyxT,np.atleast_2d(Ey).T))        
 
         self.E_emission_stats = np.array([EyyT, EyxT, ExxT, self.T])

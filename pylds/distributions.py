@@ -76,13 +76,32 @@ class Regression_diag(Regression):
 
         if n > 0:
             try:
-                self.A = np.linalg.solve(xxT, yxT.T).T
-                self.sigma = (yyT - self.A.dot(yxT.T))/n
-
                 def symmetrize(A):
                     return (A + A.T)/2.
-                self.sigma = 1e-10*np.eye(self.D_out) \
-                    + symmetrize(self.sigma)  # numerical
+
+                if self.affine:
+
+                    yxT, y = yxT[:,:-1], yxT[:,-1]
+                    xxT, x = xxT[:-1, :-1], xxT[:-1, -1]
+
+                    A = np.linalg.solve(xxT - np.outer(x,x)/n, (yxT - np.outer(y,x)/n).T).T
+                    b = np.atleast_2d(y - A.dot(x)).T/n
+                    self.A = np.hstack([A,b])
+
+                    self.sigma = (yyT \
+                                - 2 * symmetrize(np.outer(y, b)) \
+                                - 2 * symmetrize(A.dot(yxT.T - np.outer(x,b))) \
+                                + A.dot(xxT.dot(A.T)) )/n \
+                                + np.outer(b,b)
+
+                else:                    
+
+                    self.A = np.linalg.solve(xxT, yxT.T).T
+
+                    self.sigma = (yyT - self.A.dot(yxT.T))/n
+                    self.sigma = 1e-10*np.eye(self.D_out) \
+                        + symmetrize(self.sigma)  # numerical
+
             except np.linalg.LinAlgError:
                 self.broken = True
         else:
