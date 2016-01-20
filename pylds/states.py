@@ -186,6 +186,9 @@ class LDSStates(object):
             ExxT - (smoothed_sigmas[0]
                     + np.outer(smoothed_mus[0], smoothed_mus[0]))
 
+
+        self.E_addition_stats = E_xtp1_xtT.copy()
+
         E_xtp1_xtT = E_xtp1_xtT.sum(0)
 
         def is_symmetric(A):

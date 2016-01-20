@@ -3,7 +3,7 @@ from __future__ import division
 import numpy as np
 
 from pybasicbayes.distributions import Regression
-
+from autoregressive.distributions import AutoRegression
 from pybasicbayes.util.general import any_none
 
 # TODO: fix the resample() functionality to draw A, Sigma from priors
@@ -90,7 +90,7 @@ class Regression_diag(Regression):
 
                     self.sigma = (yyT \
                                 - 2 * symmetrize(np.outer(y, b)) \
-                                - 2 * symmetrize(A.dot(yxT.T - np.outer(x,b))) \
+                                - 2 * symmetrize( (yxT - np.outer(b,x)).dot(A.T) ) \
                                 + A.dot(xxT.dot(A.T)) )/n \
                                 + np.outer(b,b)
 
@@ -101,6 +101,65 @@ class Regression_diag(Regression):
                     self.sigma = (yyT - self.A.dot(yxT.T))/n
                     self.sigma = 1e-10*np.eye(self.D_out) \
                         + symmetrize(self.sigma)  # numerical
+
+            except np.linalg.LinAlgError:
+                self.broken = True
+        else:
+            self.broken = True
+
+        assert np.allclose(self.sigma,self.sigma.T)
+        assert np.all(np.linalg.eigvalsh(self.sigma) > 0.)
+
+        self._initialize_mean_field()
+
+        return self
+
+class AutoRegression_input(AutoRegression):
+
+    def __init__(
+            self, nu_0=None,S_0=None,M_0=None,K_0=None,
+            affine=False,
+            A=None,sigma=None):
+        self.affine = affine
+
+        self._check_shapes(A, sigma, nu_0, S_0, M_0, K_0)
+        self.input = False
+
+        self.A = A
+        self.sigma = sigma
+
+        have_hypers = not any_none(nu_0,S_0,M_0,K_0)
+
+        if have_hypers:
+            self.natural_hypparam = self.mf_natural_hypparam = \
+                self._standard_to_natural(nu_0,S_0,M_0,K_0)
+
+        if A is sigma is None and have_hypers:
+            self.resample()  # initialize from prior
+
+    def max_likelihood(self,data,weights=None,stats=None):
+        if stats is None:
+            stats = self._get_statistics(data) if weights is None \
+                else self._get_weighted_statistics(data,weights)
+
+        yyT, yxT, xxT, n = stats 
+
+        if n > 0:
+            try:
+                def symmetrize(A):
+                    return (A + A.T)/2.
+
+                if self.input:
+                    raise Exception('not yet implemented')
+                else:
+                    self.A = np.linalg.solve(xxT, yxT.T).T
+
+                    self.sigma = (yyT \
+                                - 2 * symmetrize(yxT.dot(self.A.T)) \
+                                + self.A.dot(xxT.dot(self.A.T)) )/n 
+
+                    #self.sigma = 1e-10*np.eye(self.D_out) \
+                    #    + symmetrize(self.sigma)  # numerical
 
             except np.linalg.LinAlgError:
                 self.broken = True
