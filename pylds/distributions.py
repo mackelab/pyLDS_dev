@@ -74,19 +74,34 @@ class Regression_diag(Regression):
 
         yyT, yxT, xxT, n = stats
 
-        if n > 0:
-            try:
-                def symmetrize(A):
-                    return (A + A.T)/2.
+        if not n > 0:
+            self.broken = True
+            return self
 
-                if self.affine:
+        try:
+            def symmetrize(A):
+                return (A + A.T)/2.
 
-                    yxT, y = yxT[:,:-1], yxT[:,-1]
-                    xxT, x = xxT[:-1, :-1], xxT[:-1, -1]
+            if self.affine:
 
-                    A = np.linalg.solve(xxT - np.outer(x,x)/n, (yxT - np.outer(y,x)/n).T).T
-                    b = np.atleast_2d(y - A.dot(x)).T/n
-                    self.A = np.hstack([A,b])
+                yxT, y = yxT[:,:-1], yxT[:,-1]
+                xxT, x = xxT[:-1, :-1], xxT[:-1, -1]
+
+                A = np.linalg.solve(xxT - np.outer(x,x)/n, (yxT - np.outer(y,x)/n).T).T
+                b = (y - A.dot(x))/n
+                self.A = np.hstack([A,np.atleast_2d(b).T])
+
+                if self.diag_sigma:
+
+                    self.dsigma = (yyT \
+                                - 2 * y * b \
+                                + 2 * np.sum(A * (np.outer(b,x) - yxT),1)
+                                + np.einsum('ij,ik,jk->i', A, A,xxT) )/n \
+                                + b * b
+
+                    self.sigma = np.diag(self.dsigma)
+
+                else:
 
                     self.sigma = (yyT \
                                 - 2 * symmetrize(np.outer(y, b)) \
@@ -94,18 +109,25 @@ class Regression_diag(Regression):
                                 + A.dot(xxT.dot(A.T)) )/n \
                                 + np.outer(b,b)
 
-                else:                    
+            else:                    
 
-                    self.A = np.linalg.solve(xxT, yxT.T).T
+                self.A = np.linalg.solve(xxT, yxT.T).T
+
+                if self.diag_sigma:
+
+                    self.dsigma = (yyT - np.sum(self.A * yxT,1))/n
+
+                    self.sigma = np.diag(self.dsigma)
+
+                else:
 
                     self.sigma = (yyT - self.A.dot(yxT.T))/n
                     self.sigma = 1e-10*np.eye(self.D_out) \
                         + symmetrize(self.sigma)  # numerical
 
-            except np.linalg.LinAlgError:
-                self.broken = True
-        else:
+        except np.linalg.LinAlgError:
             self.broken = True
+
 
         assert np.allclose(self.sigma,self.sigma.T)
         assert np.all(np.linalg.eigvalsh(self.sigma) > 0.)

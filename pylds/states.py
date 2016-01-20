@@ -175,7 +175,12 @@ class LDSStates(object):
         assert not np.isnan(smoothed_sigmas).any()
 
         data = self.data
-        EyyT = data.T.dot(data)
+
+        if self.diag_sigma_obs:
+            EyyT = np.sum(data*data,0)
+        else:
+            EyyT = data.T.dot(data)
+            
         EyxT = data.T.dot(smoothed_mus)
         ExxT = smoothed_sigmas.sum(0) + smoothed_mus.T.dot(smoothed_mus)
 
@@ -186,7 +191,7 @@ class LDSStates(object):
             ExxT - (smoothed_sigmas[0]
                     + np.outer(smoothed_mus[0], smoothed_mus[0]))
 
-
+        # MN: make copy for debugging purposes
         self.E_addition_stats = E_xtp1_xtT.copy()
 
         E_xtp1_xtT = E_xtp1_xtT.sum(0)
