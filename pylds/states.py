@@ -6,8 +6,9 @@ from pybasicbayes.util.stats import mniw_expectedstats
 
 from lds_messages_interface import kalman_filter, filter_and_sample, \
     kalman_filter_diagonal, filter_and_sample_diagonal, \
-    E_step, E_step_diagonal, info_E_step
+    E_step, E_step_diagonal, E_step_forward, E_step_backward, info_E_step
     
+from obs_scheme import ObservationScheme
 
 
 class LDSStates(object):
@@ -18,6 +19,7 @@ class LDSStates(object):
 
         self.T = T if T else data.shape[0]
         self.data = data
+        self._obs_scheme = ObservationScheme(p=self.p, T=self.T)
 
         self._normalizer = None
 
@@ -144,7 +146,7 @@ class LDSStates(object):
     ### EM
 
     def E_step(self):
-        E_xtp1_xtT = self._E_step_diag() if self.diag_sigma_obs \
+        E_xtp1_xtT = self._E_step_stitch() if self.diag_sigma_obs \
             else self._E_step()
 
         self._set_expected_stats(
@@ -168,8 +170,46 @@ class LDSStates(object):
                 self.data)
         return E_xtp1_xtT
 
+    def _E_step_stitch(self):
+
+        sub_pops = self.obs_scheme.sub_pops
+        obs_time = self.obs_scheme.obs_time
+        obs_pops = self.obs_scheme.obs_pops
+
+        smoothed_mus = np.empty((self.T,self.n))
+        smoothed_sigmas = np.empty((self.T,self.n,self.n))
+        self._normalizer = 0
+
+        mu_predicts = np.empty((self.T,self.n))
+        sigma_predicts = np.empty((self.T,self.n,self.n))
+
+        mu_init = self.mu_init
+        sigma_init = self.sigma_init
+
+        for i in range(self.obs_scheme.num_obstime):
+
+            ts = range(obs_time[0]) if i==0 else range(obs_time[i-1],obs_time[i])
+            idx = sub_pops[obs_pops[0]] if i==0 else sub_pops[obs_pops[i]]            
+
+            normalizer, mu_predicts[ts,:], sigma_predicts[ts,:,:], \
+                smoothed_mus[ts,:], smoothed_sigmas[ts,:,:], \
+                mu_init, sigma_init = E_step_forward(
+                    mu_init, sigma_init,
+                    self.A, self.sigma_states,
+                    self.C[idx,:].copy(), self.d[idx].copy(), self.dsigma_obs[idx].copy(),
+                    self.data[np.ix_(ts,idx)].copy())      
+
+            self._normalizer += normalizer
+
+        self.smoothed_mus, self.smoothed_sigmas, E_xtp1_xtT =\
+            E_step_backward(self.A, self.sigma_states, mu_predicts, sigma_predicts, 
+                            smoothed_mus, smoothed_sigmas)
+
+        return E_xtp1_xtT
+
 
     def _set_expected_stats(self,smoothed_mus,smoothed_sigmas,E_xtp1_xtT):
+
         assert not np.isnan(E_xtp1_xtT).any()
         assert not np.isnan(smoothed_mus).any()
         assert not np.isnan(smoothed_sigmas).any()
@@ -367,3 +407,15 @@ class LDSStates(object):
     @property
     def strided_stateseq(self):
         return AR_striding(self.stateseq,1)
+
+    @property
+    def obs_scheme(self):
+        return self._obs_scheme
+
+    @obs_scheme.setter
+    def obs_scheme(self, obs_scheme):
+        self._obs_scheme = obs_scheme
+        try:
+            self._obs_scheme.check_obs_scheme()
+        except:
+            raise TypeError('observation scheme does not meet requirements')

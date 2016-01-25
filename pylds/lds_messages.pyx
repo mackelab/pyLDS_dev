@@ -379,6 +379,92 @@ def filter_and_sample_diagonal(
     return ll, np.asarray(randseq)
 
 
+### structured missing data ###
+
+def E_step_forward(
+    double[:] mu_init, double[:,:] sigma_init,
+    double[:,:,:] A, double[:,:,:] sigma_states,
+    double[:,:,:] C, double[:,:] d, double[:,:] sigma_obs,
+    double[:,::1] data):
+
+    # allocate temporaries and internals
+    cdef int T = C.shape[0], p = C.shape[1], n = C.shape[2]
+    cdef int t
+
+    cdef double[:,:] mu_predicts = np.empty((T,n))
+    cdef double[:,:,:] sigma_predicts = np.empty((T,n,n))
+
+    cdef double[::1,:] temp_pn  = np.empty((p,n),  order='F')
+    cdef double[::1,:] temp_pn2 = np.empty((p,n),  order='F')
+    cdef double[::1,:] temp_pn3 = np.empty((p,n),  order='F')
+    cdef double[::1]   temp_p   = np.empty((p,),   order='F')
+    cdef double[::1,:] temp_nn  = np.empty((n,n),  order='F')
+    cdef double[::1,:] temp_pk  = np.empty((p,n+1),order='F')
+    cdef double[::1,:] temp_nk  = np.empty((n,n+1),order='F')
+
+    # allocate output
+    cdef double[:,::1] smoothed_mus = np.empty((T,n))
+    cdef double[:,:,::1] smoothed_sigmas = np.empty((T,n,n))
+    cdef double[:] mu_predict = np.empty((n,))
+    cdef double[:,:] sigma_predict = np.empty((n,n))
+    cdef double ll = 0.
+
+    # run filter forwards, saving predictions
+    mu_predicts[0] = mu_init
+    sigma_predicts[0] = sigma_init
+    for t in range(T-1):
+        ll += condition_on_affine_diagonal(
+            mu_predicts[t], sigma_predicts[t], C[t], d[t], sigma_obs[t], data[t],
+            smoothed_mus[t], smoothed_sigmas[t],
+            temp_p, temp_nn, temp_pn, temp_pn2, temp_pn3, temp_pk, temp_nk)
+        predict(
+            smoothed_mus[t], smoothed_sigmas[t], A[t], sigma_states[t],
+            mu_predicts[t+1], sigma_predicts[t+1],
+            temp_nn)
+    t += 1
+    ll += condition_on_affine_diagonal(
+        mu_predicts[t], sigma_predicts[t], C[t], d[t], sigma_obs[t], data[t],
+        smoothed_mus[t], smoothed_sigmas[t],
+        temp_p, temp_nn, temp_pn, temp_pn2, temp_pn3, temp_pk, temp_nk)
+    predict(
+        smoothed_mus[t], smoothed_sigmas[t], A[t], sigma_states[t],
+        mu_predict, sigma_predict,
+        temp_nn)
+
+    return ll, np.asarray(mu_predicts), np.asarray(sigma_predicts), \
+        np.asarray(smoothed_mus), np.asarray(smoothed_sigmas), \
+        np.asarray(mu_predict), np.asarray(sigma_predict)
+
+
+def E_step_backward(
+    double[:,:,:] A, double[:,:,:] sigma_states,
+    double[:,:] mu_predicts, double[:,:,:] sigma_predicts, 
+    double[:,::1] smoothed_mus, double[:,:,::1] smoothed_sigmas): 
+ 
+     # allocate temporaries and internals
+    cdef int T = A.shape[0], n = A.shape[1]
+    cdef int t
+
+    cdef double[::1,:] temp_nn  = np.empty((n,n),order='F')
+    cdef double[::1,:] temp_nn2 = np.empty((n,n),order='F')
+
+    # allocate output
+    cdef double[:,:,::1] ExnxT = np.empty((T-1,n,n))  # 'n' for next
+
+    # run rts update backwards, using predictions
+    for t in range(T-2,-1,-1):
+        rts_backward_step(
+            A[t], sigma_states[t],
+            smoothed_mus[t], smoothed_sigmas[t],
+            mu_predicts[t+1], sigma_predicts[t+1],
+            smoothed_mus[t+1], smoothed_sigmas[t+1],
+            temp_nn, temp_nn2)
+        set_dynamics_stats(
+            smoothed_mus[t], smoothed_mus[t+1], smoothed_sigmas[t+1],
+            temp_nn, ExnxT[t])
+    return np.asarray(smoothed_mus), np.asarray(smoothed_sigmas), np.asarray(ExnxT)
+
+
 ### random walk (A = I, B is diagonal, C = I, D is diagonal)
 
 def filter_and_sample_randomwalk(

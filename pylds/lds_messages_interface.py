@@ -15,7 +15,9 @@ from lds_messages import \
     filter_and_sample_diagonal as _filter_and_sample_diagonal, \
     filter_and_sample_randomwalk as _filter_and_sample_randomwalk, \
     E_step as _E_step, \
-    E_step_diagonal as _E_step_diagonal
+    E_step_diagonal as _E_step_diagonal, \
+    E_step_forward as _E_step_forward, \
+    E_step_backward as _E_step_backward
 
 
 def _ensure_ndim(X,T,ndim):
@@ -37,6 +39,14 @@ def _argcheck(mu_init, sigma_init, A, sigma_states, C, d, sigma_obs, data):
     data = np.require(data, dtype=np.float64, requirements='C')
     return mu_init, sigma_init, A, sigma_states, C, d, sigma_obs, data
 
+def _argcheck_backwards(A, sigma_states, mu_predicts, sigma_predicts, smoothed_mus, smoothed_sigmas):
+    assert mu_predicts.ndim>1 or smoothed_mus.ndim>1
+    T = mu_predicts.shape[0] if mu_predicts.ndim>1 else smoothed_mus.shape[0]
+    A, sigma_states, sigma_predicts, smoothed_sigmas = \
+        map(partial(_ensure_ndim, T=T, ndim=3),
+            [A, sigma_states, sigma_predicts, smoothed_sigmas])
+    mu_predicts, smoothed_mus = map(partial(_ensure_ndim, T=T, ndim=2), [mu_predicts, smoothed_mus])
+    return A, sigma_states, mu_predicts, sigma_predicts, smoothed_mus, smoothed_sigmas
 
 def _argcheck_diag_sigma_obs(mu_init, sigma_init, A, sigma_states, C, d, sigma_obs, data):
     T = data.shape[0]
@@ -69,6 +79,8 @@ E_step_diagonal = _wrap(_E_step_diagonal, _argcheck_diag_sigma_obs)
 kalman_filter = _wrap(_kalman_filter,_argcheck)
 kalman_filter_diagonal = _wrap(_kalman_filter_diagonal,_argcheck_diag_sigma_obs)
 rts_smoother = _wrap(_rts_smoother,_argcheck)
+E_step_backward = _wrap(_E_step_backward, _argcheck_backwards)
+E_step_forward = _wrap(_E_step_forward, _argcheck_diag_sigma_obs)
 filter_and_sample = _wrap(_filter_and_sample,_argcheck)
 filter_and_sample_diagonal = _wrap(_filter_and_sample_diagonal,_argcheck_diag_sigma_obs)
 filter_and_sample_randomwalk = _wrap(_filter_and_sample_randomwalk,_argcheck_randomwalk)

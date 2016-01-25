@@ -151,7 +151,7 @@ class _LDSBase(Model):
         self.emission_distn.sigma = sigma_obs
         if self.emission_distn.diag_sigma_obs:
             self.emission_distn.dsigma = np.diag(sigma_obs)
-
+            
     @property
     def diag_sigma_obs(self):
         try:
