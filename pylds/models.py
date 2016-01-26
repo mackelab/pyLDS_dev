@@ -307,7 +307,17 @@ class _LDSEM(_LDSBase, ModelEM):
     def M_step_emission_distn(self):
         self.emission_distn.max_likelihood(
             data=None,
-            stats=(sum(s.E_emission_stats for s in self.states_list)))
+            stats=(sum(s.E_emission_stats for s in self.states_list)),
+            idx_grp=self._ensure_consistent_idx_grp([s.obs_scheme for s in self.states_list]))
+
+    @staticmethod
+    def _ensure_consistent_idx_grp(obs_schemes):
+
+        if len(obs_schemes) < 2:
+            return obs_schemes[0].idx_grp
+        else:
+            raise Exception('really need to fix consistency of idx_grp for multiple data sets...')
+
 
 
 class _NonstationaryLDSEM(_LDSEM):

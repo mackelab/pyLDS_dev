@@ -214,26 +214,12 @@ class LDSStates(object):
         assert not np.isnan(smoothed_mus).any()
         assert not np.isnan(smoothed_sigmas).any()
 
-        data = self.data
 
-        if self.diag_sigma_obs:
-            EyyT = np.sum(data*data,0)
-        else:
-            EyyT = data.T.dot(data)
-            
-        EyxT = data.T.dot(smoothed_mus)
-        ExxT = smoothed_sigmas.sum(0) + smoothed_mus.T.dot(smoothed_mus)
-
-        E_xt_xtT = \
-            ExxT - (smoothed_sigmas[-1]
-                    + np.outer(smoothed_mus[-1],smoothed_mus[-1]))
-        E_xtp1_xtp1T = \
-            ExxT - (smoothed_sigmas[0]
-                    + np.outer(smoothed_mus[0], smoothed_mus[0]))
+        T, EyyT, EyxT = self._set_expected_stats_data(smoothed_mus)
+        ExxT, E_xt_xtT, E_xtp1_xtp1T, ExxTe = self._set_expected_stats_latents(smoothed_mus, smoothed_sigmas)
 
         # MN: make copy for debugging purposes
         self.E_addition_stats = E_xtp1_xtT.copy()
-
         E_xtp1_xtT = E_xtp1_xtT.sum(0)
 
         def is_symmetric(A):
@@ -243,14 +229,110 @@ class LDSStates(object):
         assert is_symmetric(E_xt_xtT)
         assert is_symmetric(E_xtp1_xtp1T)
 
-        if self.model.emission_distn.affine:
-            Ex, Ey = smoothed_mus.sum(0), data.sum(0)
-            ExxT = blockarray([[ExxT,np.atleast_2d(Ex).T],
-                               [np.atleast_2d(Ex),np.atleast_2d(self.T)]])
+
+        self.E_emission_stats = np.array([EyyT, EyxT, ExxTe, T])
+        self.E_dynamics_stats = np.array([E_xtp1_xtp1T, E_xtp1_xtT, E_xt_xtT, self.T-1])
+
+
+    def _set_expected_stats_data(self, smoothed_mus):
+
+        sub_pops = self.obs_scheme.sub_pops        
+        obs_pops = self.obs_scheme.obs_pops
+        obs_time = self.obs_scheme.obs_time
+        idx_grp = self.obs_scheme.idx_grp
+        obs_idx = self.obs_scheme.obs_idx
+
+        data = self.data
+
+        if obs_time.size > 1:
+
+            T = np.zeros(len(idx_grp))
+
+            Ey = np.zeros(self.p)
+            EyyT = np.zeros(self.p)
+            EyxT = np.zeros((self.p, self.n))
+
+            for i in range(obs_time.size):
+
+                T[obs_idx[i]] += obs_time[0] if i==0 else obs_time[i] - obs_time[i-1]
+
+                idx = sub_pops[obs_pops[i]]
+                if idx.size>0:
+
+                    ts  = range(obs_time[0]) if i==0 else range(obs_time[i-1], obs_time[i])
+
+                    Ey[idx] += np.sum(data[np.ix_(ts,idx)],0)          
+                    ytmp = data[np.ix_(ts,idx)]
+                    EyyT[idx] += np.sum(ytmp*ytmp,0) 
+                    EyxT[idx,:] += np.einsum('ni,nj->ij', self.data[np.ix_(ts,idx)], smoothed_mus[ts,:])
+
+        else:
+
+            T = self.T
+
+            Ey = self.data.sum(0)
+            EyyT = np.sum(data*data,0) if self.diag_sigma_obs else data.T.dot(data)            
+            EyxT = data.T.dot(smoothed_mus)
+
+        if self.diag_sigma_obs:
             EyxT = np.hstack((EyxT,np.atleast_2d(Ey).T))        
 
-        self.E_emission_stats = np.array([EyyT, EyxT, ExxT, self.T])
-        self.E_dynamics_stats = np.array([E_xtp1_xtp1T, E_xtp1_xtT, E_xt_xtT, self.T-1])
+        return T, EyyT, EyxT
+
+
+    def _set_expected_stats_latents(self, smoothed_mus, smoothed_sigmas):
+
+        sub_pops = self.obs_scheme.sub_pops        
+        obs_pops = self.obs_scheme.obs_pops
+        obs_time = self.obs_scheme.obs_time
+        idx_grp = self.obs_scheme.idx_grp
+        obs_idx = self.obs_scheme.obs_idx        
+
+        if obs_time.size > 1:
+            T = np.zeros(len(idx_grp))
+            Ex = np.zeros(self.n)
+            ExxT = np.zeros((self.n,self.n))
+            Exe = np.zeros((self.n, len(idx_grp)))       
+            ExxTj = np.zeros((self.n, self.n, len(idx_grp)))            
+            ExxTe = np.zeros((self.n+1, self.n+1, len(idx_grp)))            
+
+            for i in range(obs_time.size):
+                ts  = range(obs_time[0]) if i==0 else range(obs_time[i-1], obs_time[i])
+
+                x = smoothed_mus[ts,:]
+                sx   = np.sum(x,0)
+                sxxT = smoothed_sigmas[ts,:,:].sum(0) + x.T.dot(x)
+                for j in obs_idx[i]: 
+                    Exe[:,j]      += sx
+                    ExxTj[:,:,j]  += sxxT
+                    T[j] += len(ts)
+                Ex += sx
+                ExxT += sxxT
+
+            for j in range(len(idx_grp)): 
+                ExxTe[:,:,j] = blockarray([[ExxTj[:,:,j],np.atleast_2d(Exe[:,j]).T],
+                    [np.atleast_2d(Exe[:,j]),np.atleast_2d(T[j])]])
+
+        else:
+            Ex = self.smoothed_mus.sum(0)
+            ExxT = self.smoothed_sigmas.sum(0) + self.smoothed_mus.T.dot(smoothed_mus)
+
+        E_xt_xtT = \
+            ExxT - (smoothed_sigmas[-1]
+                    + np.outer(smoothed_mus[-1],smoothed_mus[-1]))
+        E_xtp1_xtp1T = \
+            ExxT - (smoothed_sigmas[0]
+                    + np.outer(smoothed_mus[0], smoothed_mus[0]))
+
+        if self.model.emission_distn.affine:
+            ExxT = blockarray([[ExxT,np.atleast_2d(Ex).T],
+                [np.atleast_2d(Ex),np.atleast_2d(self.T)]])
+
+        if not obs_time.size > 1:
+            ExxTe = ExxT
+
+        return ExxT, E_xt_xtT, E_xtp1_xtp1T, ExxTe
+
 
     # next two methods are for testing
 

@@ -15,6 +15,7 @@ class Regression_diag(Regression):
             self, nu_0=None,S_0=None,M_0=None,K_0=None,
             affine=False,
             A=None,sigma=None):
+
         self.affine = affine
 
         self.diag_sigma = self._check_shapes(A, sigma, nu_0, S_0, M_0, K_0)
@@ -67,65 +68,25 @@ class Regression_diag(Regression):
         else:
             return True
 
-    def max_likelihood(self,data,weights=None,stats=None):
+    def max_likelihood(self,data,weights=None,stats=None, idx_grp=None):
         if stats is None:
             stats = self._get_statistics(data) if weights is None \
                 else self._get_weighted_statistics(data,weights)
-
-        yyT, yxT, xxT, n = stats
-
-        if not n > 0:
-            self.broken = True
-            return self
-
         try:
-            def symmetrize(A):
-                return (A + A.T)/2.
 
-            if self.affine:
+            n = stats[3]
+            if isinstance(n, np.ndarray):
 
-                yxT, y = yxT[:,:-1], yxT[:,-1]
-                xxT, x = xxT[:-1, :-1], xxT[:-1, -1]
+                self._ml_stitch(stats, idx_grp)
 
-                A = np.linalg.solve(xxT - np.outer(x,x)/n, (yxT - np.outer(y,x)/n).T).T
-                b = (y - A.dot(x))/n
-                self.A = np.hstack([A,np.atleast_2d(b).T])
+            elif not n > 0:
+                self.broken = True
+                return self
 
-                if self.diag_sigma:
+            else:
+                self._ml_affine(stats) if self.affine else self._ml_linear(stats)
 
-                    self.dsigma = (yyT \
-                                - 2 * y * b \
-                                + 2 * np.sum(A * (np.outer(b,x) - yxT),1)
-                                + np.einsum('ij,ik,jk->i', A, A,xxT) )/n \
-                                + b * b
-
-                    self.sigma = np.diag(self.dsigma)
-
-                else:
-
-                    self.sigma = (yyT \
-                                - 2 * symmetrize(np.outer(y, b)) \
-                                - 2 * symmetrize( (yxT - np.outer(b,x)).dot(A.T) ) \
-                                + A.dot(xxT.dot(A.T)) )/n \
-                                + np.outer(b,b)
-
-            else:                    
-
-                self.A = np.linalg.solve(xxT, yxT.T).T
-
-                if self.diag_sigma:
-
-                    self.dsigma = (yyT - np.sum(self.A * yxT,1))/n
-
-                    self.sigma = np.diag(self.dsigma)
-
-                else:
-
-                    self.sigma = (yyT - self.A.dot(yxT.T))/n
-                    self.sigma = 1e-10*np.eye(self.D_out) \
-                        + symmetrize(self.sigma)  # numerical
-
-        except np.linalg.LinAlgError:
+        except np.linalg.LinAlgError:            
             self.broken = True
 
 
@@ -135,6 +96,93 @@ class Regression_diag(Regression):
         self._initialize_mean_field()
 
         return self
+
+    def _ml_linear(self, stats):
+
+        yyT, yxT, xxT, n = stats
+
+        def symmetrize(A):
+            return (A + A.T)/2.
+
+        self.A = np.linalg.solve(xxT, yxT.T).T
+
+        if self.diag_sigma:
+
+            self.dsigma = (yyT - np.sum(self.A * yxT,1))/n
+
+            self.sigma = np.diag(self.dsigma)
+
+        else:
+
+            self.sigma = (yyT - self.A.dot(yxT.T))/n
+            self.sigma = 1e-10*np.eye(self.D_out) \
+                + symmetrize(self.sigma)  # numerical
+
+    def _ml_affine(self, stats):
+
+        yyT, yxT, xxT, n = stats
+
+        def symmetrize(A):
+            return (A + A.T)/2.
+
+        yxT, y = yxT[:,:-1], yxT[:,-1]
+        xxT, x = xxT[:-1, :-1], xxT[:-1, -1]
+
+        A = np.linalg.solve(xxT - np.outer(x,x)/n, (yxT - np.outer(y,x)/n).T).T
+        b = (y - A.dot(x))/n
+        self.A = np.hstack([A,np.atleast_2d(b).T])
+
+        if self.diag_sigma:
+
+            self.dsigma = (yyT \
+                        - 2 * y * b \
+                        + 2 * np.sum(A * (np.outer(b,x) - yxT),1)
+                        + np.einsum('ij,ik,jk->i', A, A,xxT) )/n \
+                        + b * b
+
+            self.sigma = np.diag(self.dsigma)
+
+        else:
+
+            self.sigma = (yyT \
+                        - 2 * symmetrize(np.outer(y, b)) \
+                        - 2 * symmetrize( (yxT - np.outer(b,x)).dot(A.T) ) \
+                        + A.dot(xxT.dot(A.T)) )/n \
+                        + np.outer(b,b)
+
+
+    def _ml_stitch(self, stats, idx_grp):
+
+        yyT, yxT, xxT, n = stats
+
+        yxT, y = yxT[:,:-1], yxT[:,-1]
+        xxT, x = xxT[:-1, :-1, :], xxT[:-1, -1, :]
+
+        A = np.empty((self.D_out,self.D_in-1))    
+        b = np.empty(self.D_out)
+
+        AxxTAT = np.zeros(self.D_out)
+        bxT = np.zeros((self.D_out,self.D_in-1))
+
+        for j in range(len(idx_grp)):
+            ixg  = idx_grp[j]
+
+            A[ixg,:] = np.linalg.solve(xxT[:,:,j] - np.outer(x[:,j], x[:,j]) / n[j],
+                (yxT[ixg,:] - np.outer(y[ixg], x[:,j]) / n[j]).T).T
+            b[ixg] = (y[ixg] - A[ixg,:].dot(x[:,j])) / n[j]
+
+            bxT[ixg,:] += np.outer(b[ixg],x[:,j])
+            AxxTAT[ixg] += np.einsum('ij,ik,jk->i', A[ixg,:], A[ixg,:], xxT[:,:,j])
+
+        self.A = np.hstack([A,np.atleast_2d(b).T])
+
+        self.dsigma = yyT - 2 * y * b + AxxTAT + 2 * np.sum(A * (bxT-yxT),1)
+        for i in range(len(idx_grp)):
+            self.dsigma[idx_grp[i]] /= n[i]
+        self.dsigma += b*b
+        
+        self.sigma = np.diag(self.dsigma)                        
+
 
 class AutoRegression_input(AutoRegression):
 
