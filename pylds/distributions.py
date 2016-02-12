@@ -90,7 +90,7 @@ class Regression_diag(Regression):
             self.broken = True
 
 
-        assert np.allclose(self.sigma,self.sigma.T)
+        #assert np.allclose(self.sigma,self.sigma.T)
         assert np.all(np.linalg.eigvalsh(self.sigma) > 0.)
 
         self._initialize_mean_field()
@@ -181,6 +181,7 @@ class Regression_diag(Regression):
             self.dsigma[idx_grp[i]] /= n[i]
         self.dsigma += b*b
         
+        self.dsigma += 1e-10*np.ones(self.D_out) # numerical
         self.sigma = np.diag(self.dsigma)                        
 
 
@@ -228,16 +229,16 @@ class AutoRegression_input(AutoRegression):
                                 - 2 * symmetrize(yxT.dot(self.A.T)) \
                                 + self.A.dot(xxT.dot(self.A.T)) )/n 
 
-                    #self.sigma = 1e-10*np.eye(self.D_out) \
-                    #    + symmetrize(self.sigma)  # numerical
+                    self.sigma = 1e-10*np.eye(self.D_out) \
+                        + symmetrize(self.sigma)  # numerical
 
             except np.linalg.LinAlgError:
                 self.broken = True
         else:
             self.broken = True
 
-        assert np.allclose(self.sigma,self.sigma.T)
-        assert np.all(np.linalg.eigvalsh(self.sigma) > 0.)
+        #assert np.allclose(self.sigma,self.sigma.T)
+        #assert np.all(np.linalg.eigvalsh(self.sigma) > 0.)
 
         self._initialize_mean_field()
 

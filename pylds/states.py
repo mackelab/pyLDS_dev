@@ -197,13 +197,27 @@ class LDSStates(object):
                     mu_init, sigma_init,
                     self.A, self.sigma_states,
                     self.C[idx,:].copy(), self.d[idx].copy(), self.dsigma_obs[idx].copy(),
-                    self.data[np.ix_(ts,idx)].copy())      
+                    self.data[np.ix_(ts,idx)].copy())     
+
+            if np.any(np.isnan(smoothed_mus)):
+                self.smoothed_mus = smoothed_mus
+                self.mu_predicts = mu_predicts
+                print(smoothed_mus) 
+
+            #tmp = smoothed_sigmas[ts,:].sum(0)
+            #assert np.allclose(tmp, tmp.T)
+            #tmp = sigma_predicts[ts,:].sum(0)
+            #assert np.allclose(tmp, tmp.T)
 
             self._normalizer += normalizer
 
         self.smoothed_mus, self.smoothed_sigmas, E_xtp1_xtT =\
             E_step_backward(self.A, self.sigma_states, mu_predicts, sigma_predicts, 
                             smoothed_mus, smoothed_sigmas)
+
+        #tmp = self.smoothed_sigmas.sum(0)
+        #assert np.allclose(tmp, tmp.T)
+
 
         return E_xtp1_xtT
 
@@ -225,9 +239,9 @@ class LDSStates(object):
         def is_symmetric(A):
             return np.allclose(A,A.T)                                    
 
-        assert is_symmetric(ExxT)
-        assert is_symmetric(E_xt_xtT)
-        assert is_symmetric(E_xtp1_xtp1T)
+        #assert is_symmetric(ExxT)
+        #assert is_symmetric(E_xt_xtT)
+        #assert is_symmetric(E_xtp1_xtp1T)
 
 
         self.E_emission_stats = np.array([EyyT, EyxT, ExxTe, T])
@@ -314,8 +328,8 @@ class LDSStates(object):
                     [np.atleast_2d(Exe[:,j]),np.atleast_2d(T[j])]])
 
         else:
-            Ex = self.smoothed_mus.sum(0)
-            ExxT = self.smoothed_sigmas.sum(0) + self.smoothed_mus.T.dot(smoothed_mus)
+            Ex = smoothed_mus.sum(0)
+            ExxT = smoothed_sigmas.sum(0) + smoothed_mus.T.dot(smoothed_mus)
 
         E_xt_xtT = \
             ExxT - (smoothed_sigmas[-1]
