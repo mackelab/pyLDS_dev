@@ -298,6 +298,7 @@ class _LDSEM(_LDSBase, ModelEM):
     def M_step(self):
         self.M_step_dynamics_distn()
         self.M_step_emission_distn()
+        self.M_step_initial_distn()
 
     def M_step_dynamics_distn(self):
         self.dynamics_distn.max_likelihood(
@@ -309,6 +310,11 @@ class _LDSEM(_LDSBase, ModelEM):
             data=None,
             stats=(sum(s.E_emission_stats for s in self.states_list)),
             idx_grp=self._ensure_consistent_idx_grp([s.obs_scheme for s in self.states_list]))
+
+    def M_step_initial_distn(self):
+        Ex0, ExxT0, n = (sum(s.E_initial_stats for s in self.states_list))
+        self._mu_init = Ex0/n
+        self._sigma_init = ExxT0/n  - np.outer(self._mu_init,self._mu_init)
 
     @staticmethod
     def _ensure_consistent_idx_grp(obs_schemes):

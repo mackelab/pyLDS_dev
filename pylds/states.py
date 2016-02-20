@@ -239,13 +239,16 @@ class LDSStates(object):
         def is_symmetric(A):
             return np.allclose(A,A.T)                                    
 
-        #assert is_symmetric(ExxT)
-        #assert is_symmetric(E_xt_xtT)
-        #assert is_symmetric(E_xtp1_xtp1T)
+        assert is_symmetric(ExxT)
+        assert is_symmetric(E_xt_xtT)
+        assert is_symmetric(E_xtp1_xtp1T)
 
+        Ex0, ExxT0 = self._set_expected_stats_initial(smoothed_mus, smoothed_sigmas)        
+        assert is_symmetric(ExxT0)
 
         self.E_emission_stats = np.array([EyyT, EyxT, ExxTe, T])
         self.E_dynamics_stats = np.array([E_xtp1_xtp1T, E_xtp1_xtT, E_xt_xtT, self.T-1])
+        self.E_initial_stats  = np.array([Ex0, ExxT0, 1])
 
 
     def _set_expected_stats_data(self, smoothed_mus):
@@ -346,6 +349,12 @@ class LDSStates(object):
             ExxTe = ExxT
 
         return ExxT, E_xt_xtT, E_xtp1_xtp1T, ExxTe
+
+
+    def _set_expected_stats_initial(self, smoothed_mus, smoothed_sigmas):
+
+        return smoothed_mus[0], smoothed_sigmas[0] + np.outer(smoothed_mus[0],smoothed_mus[0])
+
 
 
     # next two methods are for testing
