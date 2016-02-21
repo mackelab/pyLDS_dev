@@ -176,12 +176,12 @@ class LDSStates(object):
         obs_time = self.obs_scheme.obs_time
         obs_pops = self.obs_scheme.obs_pops
 
-        smoothed_mus = np.empty((self.T,self.n))
-        smoothed_sigmas = np.empty((self.T,self.n,self.n))
+        smoothed_mus = np.zeros((self.T,self.n))
+        smoothed_sigmas = np.zeros((self.T,self.n,self.n))
         self._normalizer = 0
 
-        mu_predicts = np.empty((self.T,self.n))
-        sigma_predicts = np.empty((self.T,self.n,self.n))
+        mu_predicts = np.zeros((self.T,self.n))
+        sigma_predicts = np.zeros((self.T,self.n,self.n))
 
         mu_init = self.mu_init
         sigma_init = self.sigma_init

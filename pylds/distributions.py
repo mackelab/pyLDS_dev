@@ -167,9 +167,13 @@ class Regression_diag(Regression):
         for j in range(len(idx_grp)):
             ixg  = idx_grp[j]
 
+            tmp = np.linalg.solve(xxT[:,:,j] - np.outer(x[:,j], x[:,j]) / n[j],
+                (yxT[ixg,:] - np.outer(y[ixg], x[:,j]) / n[j]).T).T
+
             A[ixg,:] = np.linalg.solve(xxT[:,:,j] - np.outer(x[:,j], x[:,j]) / n[j],
                 (yxT[ixg,:] - np.outer(y[ixg], x[:,j]) / n[j]).T).T
             b[ixg] = (y[ixg] - A[ixg,:].dot(x[:,j])) / n[j]
+
 
             bxT[ixg,:] += np.outer(b[ixg],x[:,j])
             AxxTAT[ixg] += np.einsum('ij,ik,jk->i', A[ixg,:], A[ixg,:], xxT[:,:,j])

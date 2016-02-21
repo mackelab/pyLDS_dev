@@ -4,6 +4,7 @@ import scipy as sp
 from models import LDS, DefaultLDS
 from distributions import Regression_diag, AutoRegression_input
 from obs_scheme import ObservationScheme
+from scipy.linalg import solve_discrete_lyapunov as dlyap
 
 def gen_pars(n, p, u_dim=0, 
              pars_in=None, 
@@ -212,12 +213,20 @@ def gen_pars(n, p, u_dim=0,
         if gen_A == 'diagonal':
             pars_out['A'] = np.diag(lts) # lts = latent time scales
         elif gen_A == 'full':
-            pars_out['A'] = np.diag(lts) # lts = latent time scales
-            if n == 3:
-                W    = rand_rotation_matrix()
-                pars_out['A'] = np.dot(np.dot(W, pars_out['A']), np.linalg.inv(W))
-            else:
-                raise Exception('random rotation matrices for n != 3 not implemented')
+            #pars_out['A'] = np.diag(lts) # lts = latent time scales
+            #if n == 3:
+            #    W    = rand_rotation_matrix()
+            #    pars_out['A'] = np.dot(np.dot(W, pars_out['A']), np.linalg.inv(W))
+            #else:
+            #    raise Exception('random rotation matrices for n != 3 not implemented')
+            while True:
+                pars_out['A'] = np.random.normal(size=(n,n))
+                D, V = np.linalg.eig(pars_out['A'])
+                D = (lts/np.abs(D)) * D
+                pars_out['A'] = np.real(V.dot(np.diag(D).dot(np.linalg.inv(V))))
+                if np.mean( (np.abs(np.linalg.eigvals(pars_out['A']) ) - lts)**2 ) < 0.01**2:
+                    break
+
         elif gen_A == 'random':
             pars_out['A'] = np.random.normal(size=[n,n])            
         elif gen_A == 'zero':  # e.g. when fitting without dynamics
@@ -276,7 +285,9 @@ def gen_pars(n, p, u_dim=0,
     # generate initial latent state covariance matrix V0
     if gen_pars_flags[4]:
         if gen_V0 == 'identity': 
-            pars_out['V0']   = np.identity(n)  
+            pars_out['V0'] = np.identity(n)  
+        elif gen_V0 == 'stable':
+            pars_out['V0'] = dlyap(pars_out['A'], pars_out['Q'])
         else:
             raise Exception(('selected type for generating V0 not supported. '
                              'Selected type is '), gen_V0)
