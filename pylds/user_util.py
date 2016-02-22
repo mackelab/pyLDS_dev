@@ -355,8 +355,8 @@ def gen_pars(n, p, u_dim=0,
     # generate emission noise covariance matrix R
     if gen_pars_flags[7]:
         if gen_R == 'fraction':
-            # set R_ii as 25% to 125% of total variance of y_i
-            pars_out['R'] =(0.25+np.random.uniform(size=[p]))*CPiC.diagonal()
+            # set R_ii as 75% to 125% of total variance of y_i
+            pars_out['R'] =(3+2*np.random.uniform(size=[p]))/4*CPiC.diagonal()
         elif gen_R == 'fractionObserved':
             if y is None:
                 raise Exception(('tried to set emission noise covariance R as '
