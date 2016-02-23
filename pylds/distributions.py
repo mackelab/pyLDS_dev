@@ -158,8 +158,9 @@ class Regression_diag(Regression):
         yxT, y = yxT[:,:-1], yxT[:,-1]
         xxT, x = xxT[:-1, :-1, :], xxT[:-1, -1, :]
 
-        A = np.empty((self.D_out,self.D_in-1))    
-        b = np.empty(self.D_out)
+        A = np.zeros((self.D_out,self.D_in-1))    
+        b = np.zeros(self.D_out)
+
 
         AxxTAT = np.zeros(self.D_out)
         bxT = np.zeros((self.D_out,self.D_in-1))
@@ -186,6 +187,7 @@ class Regression_diag(Regression):
         self.dsigma += b*b
         
         self.dsigma += 1e-10*np.ones(self.D_out) # numerical
+
         self.sigma = np.diag(self.dsigma)                        
 
 
@@ -241,8 +243,8 @@ class AutoRegression_input(AutoRegression):
         else:
             self.broken = True
 
-        #assert np.allclose(self.sigma,self.sigma.T)
-        #assert np.all(np.linalg.eigvalsh(self.sigma) > 0.)
+        assert np.allclose(self.sigma,self.sigma.T)
+        assert np.all(np.linalg.eigvalsh(self.sigma) > 0.)
 
         self._initialize_mean_field()
 
