@@ -322,7 +322,9 @@ class _LDSEM(_LDSBase, ModelEM):
         if len(obs_schemes) < 2:
             return obs_schemes[0].idx_grp
         else:
-            raise Exception('really need to fix consistency of idx_grp for multiple data sets...')
+            return obs_schemes[0].idx_grp
+            print('assuming all observation schemes are identical for all trials!')
+            print('really need to fix consistency of idx_grp for multiple data sets...')
 
 
 
